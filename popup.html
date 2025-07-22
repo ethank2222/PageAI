@@ -1,79 +1,107 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PageAI Chatbot</title>
-    <link rel="stylesheet" href="popup.css" />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
-      crossorigin="anonymous"
-    />
-  </head>
-  <body
-    style="
-      margin: 0;
-      background: #e9eef5;
-      padding: 0px;
-      border-radius: 10px;
-      min-width: 420px;
-      min-height: 600px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    "
-  >
-    <div
-      id="chatbot-container"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="chat-header-title"
-    >
-      <div id="chat-header">
-        <span id="connection-status">
-          <span id="connection-status-dot"></span>
-          <span id="connection-status-label"></span>
-        </span>
-        <div id="chat-header-buttons">
-          <button
-            id="clear-page-btn"
-            aria-label="Clear this page's chat"
-            title="Clear this page's chat"
-            tabindex="0"
-          >
-            <i class="fa-solid fa-eye-slash"></i>
-          </button>
-          <button
-            id="clear-all-btn"
-            aria-label="Clear all chats"
-            title="Clear all chats"
-            tabindex="0"
-          >
-            <i class="fa-solid fa-trash"></i>
-          </button>
-        </div>
-      </div>
-      <div id="index-status" role="status" aria-live="polite"></div>
-      <div
-        id="chat-messages"
-        aria-live="polite"
-        aria-label="Chat messages"
-      ></div>
-      <form id="chat-form" autocomplete="off" aria-label="Chat input area">
-        <input
-          type="text"
-          id="chat-input"
-          placeholder="Ask about this page..."
-          autocomplete="off"
-          required
-          aria-label="Type your question about this page"
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=600, initial-scale=1.0" />
+        <title>PageAI Chatbot</title>
+        <link rel="stylesheet" href="popup.css" />
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
+            crossorigin="anonymous"
         />
-        <button type="submit" id="send-btn" aria-label="Send message">
-          Send
-        </button>
-      </form>
-    </div>
-    <script src="popup.js"></script>
-  </body>
+    </head>
+    <body>
+        <div id="popup-root">
+            <aside id="sidebar" aria-label="Sidebar" style="display: none">
+                <div id="sidebar-content">
+                    <div class="sidebar-title">History</div>
+                    <div
+                        id="history-panel"
+                        class="sidebar-panel"
+                        tabindex="0"
+                        aria-label="History"
+                        style="display: block"
+                    >
+                        <ul id="history-list"></ul>
+                    </div>
+                    <button
+                        id="clear-all-btn"
+                        class="sidebar-clear-btn"
+                        aria-label="Clear all history"
+                        title="Clear all history"
+                    >
+                        Clear All History
+                    </button>
+                </div>
+            </aside>
+            <main id="main-area">
+                <header id="chat-header">
+                    <div id="model-status">
+                        <span id="connection-status-dot"></span>
+                        <select
+                            id="provider-select"
+                            aria-label="Choose model/provider"
+                        >
+                            <option value="openai">OpenAI</option>
+                            <option value="claude">Claude</option>
+                            <option value="gemini">Gemini</option>
+                            <option value="grok">Grok</option>
+                        </select>
+                        <span class="dropdown-arrow">▼</span>
+                        <span
+                            style="margin-left: 10px; line-height: 25px"
+                            id="connection-status-label"
+                        ></span>
+                    </div>
+                    <div id="topbar-actions">
+                        <button
+                            id="history-btn"
+                            class="topbar-icon"
+                            aria-label="Show history"
+                            title="Show history"
+                        >
+                            <i class="fa fa-clock-rotate-left"></i>
+                        </button>
+                        <button
+                            id="clear-page-btn"
+                            class="topbar-icon"
+                            aria-label="Clear conversation"
+                            title="Clear conversation"
+                        >
+                            <i class="fa-solid fa-eye-slash"></i>
+                        </button>
+                    </div>
+                </header>
+                <div id="index-status" role="status" aria-live="polite"></div>
+                <section
+                    id="chat-messages"
+                    aria-live="polite"
+                    aria-label="Chat messages"
+                ></section>
+                <form
+                    id="chat-form"
+                    autocomplete="off"
+                    aria-label="Chat input area"
+                >
+                    <input
+                        type="text"
+                        id="chat-input"
+                        placeholder="Ask about this page..."
+                        autocomplete="off"
+                        required
+                        aria-label="Type your question about this page"
+                    />
+                    <button
+                        type="submit"
+                        id="send-btn"
+                        aria-label="Send message"
+                    >
+                        <i class="fa fa-paper-plane"></i>
+                    </button>
+                </form>
+            </main>
+        </div>
+        <script src="popup.js"></script>
+    </body>
 </html>

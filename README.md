@@ -1,87 +1,75 @@
-# PageAI Chatbot Browser Extension
+# PageAI Extension
 
-PageAI Chatbot is a browser extension (Chrome & Firefox) that brings AI chat to every web page, allowing you to ask questions about the current page's content. The chatbot reads the full HTML of the page and provides expert answers, with conversation history saved per page.
+PageAI is a browser extension that brings AI chat to every web page, allowing you to ask questions about the current page's content. It supports OpenAI, Anthropic (Claude), Gemini, and Grok via a secure backend proxy.
 
 ## Features
 
-- AI-powered chatbot for any web page (works with OpenAI and other providers)
-- Reads and understands the full HTML of the current page
-- Sleek, modern popup UI
-- Conversation history saved per page
-- Works on all HTML pages
-- Secure: No data is stored outside your browser
-- Works in both Chrome and Firefox
+-   Chat with LLMs about any web page
+-   Supports OpenAI, Claude, Gemini, and Grok
+-   Conversation and page history
+-   Modern, professional UI
+-   Secure: API keys are never exposed to the client
 
-## Setup
+## Setup Instructions
 
-1. Clone or download this repository.
-2. Create a file named `api_key.json` in the root directory (see below for format).
-3. Build or download the icon set (see below).
-4. **Inject your API keys:**
-   ```sh
-   node inject_api_key.js
-   ```
-   This will inject your API keys into `popup.js` for local use. **You must re-run this command any time you change `api_key.json` or update `popup.js`.**
-5. Load the extension:
-   - **Chrome**: Go to `chrome://extensions`, enable Developer Mode, and click "Load unpacked". Select this folder.
-   - **Firefox**: Go to `about:debugging#/runtime/this-firefox`, click "Load Temporary Add-on...", and select `manifest.json` in this folder.
-6. **Reload the extension in your browser** after running the injection script to ensure the latest keys are used.
+### 1. Clone the Repository
 
-## API Key Management
+```
+git clone https://github.com/yourusername/PageAI.git
+cd PageAI
+```
 
-1. Create a file named `api_key.json` in the root directory:
-   ```json
-   {
-     "openai": "sk-...",
-     "gemini": "",
-     "grok": "",
-     "anthropic": ""
-   }
-   ```
-   - You can provide one or more keys. The extension will use the first non-empty key in the order: openai, gemini, grok, anthropic.
-   - For OpenAI, use your OpenAI key. For other providers, use their key and update the endpoint in `popup.js` if needed.
-2. Make sure `api_key.json` is in your `.gitignore` (already set).
+### 2. Set Up the Backend Proxy
 
-**Never commit your real API key to version control!**
+#### a. Install dependencies
 
-## Troubleshooting
+```
+npm install
+```
 
-### Why does the extension show as "Disconnected"?
+#### b. Create a `.env` file in the project root:
 
-- The extension will show as "Disconnected" (red dot) if no valid API key is injected into `popup.js`.
-- **To fix:**
-  1. Make sure your `api_key.json` contains at least one valid, non-empty key (e.g., your OpenAI key).
-  2. Run:
-     ```sh
-     node inject_api_key.js
-     ```
-  3. Check that the top of `popup.js` now contains lines like:
-     ```js
-     const openaiKey = "sk-...";
-     const geminiKey = "";
-     // ...
-     ```
-  4. Reload the extension in your browser.
-- If you change `api_key.json` or update `popup.js`, **always re-run the injection script and reload the extension**.
+```
+OPENAI_API_KEY=sk-...
+GROK_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-...
+GEMINI_API_KEY=...
+PORT=3001
+```
 
-### Other Issues
+#### c. Start the proxy server
 
-- If you see errors about missing keys or "API key not set", repeat the steps above.
-- If you have multiple keys, the extension will use the first available one in the order: openai, gemini, grok, anthropic.
+```
+node proxy-server.js
+```
 
-## Permissions
+-   The proxy will run on `http://localhost:3001` by default.
+-   **All API keys must be set in the `.env` file.**
+-   The extension will communicate only with the proxy endpoints (never directly with LLM providers).
 
-- `storage`: To save conversation history per page
-- `host_permissions`: To access page content
+### 3. Load the Extension in Your Browser
 
-## Security
+1. Open Chrome or Firefox and go to the Extensions page.
+2. Enable "Developer mode" (Chrome) or "Debug Add-ons" (Firefox).
+3. Click "Load unpacked" (Chrome) or "Load Temporary Add-on" (Firefox).
+4. Select the `PageAI` directory.
 
-- Your API key is stored locally and never sent to third parties except your AI provider.
-- All conversations are stored only in your browser.
+### 4. Usage
 
-## Icons
+-   Click the PageAI icon to open the popup.
+-   Use the chat interface to ask questions about the current page.
+-   All LLM requests are routed securely through your backend proxy.
 
-Add your own icons as `icon16.png`, `icon32.png`, `icon48.png`, and `icon128.png` in the root directory for a professional look.
+### 5. Deployment (Optional)
+
+-   Deploy your proxy server to a cloud provider (Render, Vercel, Heroku, etc.).
+-   Update the endpoints in `popup.js` to use your deployed proxy URL instead of `localhost`.
+-   Never expose your API keys in the extension or client code.
+
+## Security Notes
+
+-   **Never commit your `.env` file or API keys to version control.**
+-   The extension is designed to keep all secrets on the backend.
 
 ## License
 
