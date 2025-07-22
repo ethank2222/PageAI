@@ -71,6 +71,3 @@ node proxy-server.js
 -   **Never commit your `.env` file or API keys to version control.**
 -   The extension is designed to keep all secrets on the backend.
 
-## License
-
-MIT
