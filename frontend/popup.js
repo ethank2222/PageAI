@@ -16,6 +16,7 @@ const container = document.getElementById("main-area");
 const historyBtn = document.getElementById("history-btn");
 const clearPageBtn = document.getElementById("clear-page-btn");
 const clearAllBtn = document.getElementById("clear-all-btn");
+const sendBtn = document.getElementById("send-btn");
 
 let currentTabId = null;
 let pageKey = null;
@@ -478,7 +479,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // In chatForm submit handler, preprocess pageHtml before sending to askChatAPI
     if (chatForm) {
-        const sendBtn = document.getElementById("send-btn");
         chatForm.addEventListener("submit", async (e) => {
             // Prevent submission if tool is disconnected
             if (sendBtn && sendBtn.disabled) {
