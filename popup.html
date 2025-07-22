@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PageAI Chatbot</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div
+      id="chatbot-container"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chat-header-title"
+    >
+      <div id="chat-header">
+        <span id="chat-header-title">PageAI Chatbot</span>
+        <div id="chat-header-buttons">
+          <button
+            id="clear-page-btn"
+            aria-label="Clear this page's chat"
+            title="Clear this page's chat"
+            tabindex="0"
+          >
+            🗑️
+          </button>
+          <button
+            id="clear-all-btn"
+            aria-label="Clear all chats"
+            title="Clear all chats"
+            tabindex="0"
+          >
+            🧹
+          </button>
+          <button
+            id="close-btn"
+            aria-label="Close chat"
+            title="Close chat"
+            tabindex="0"
+          >
+            &times;
+          </button>
+        </div>
+      </div>
+      <div id="index-status" role="status" aria-live="polite"></div>
+      <div
+        id="chat-messages"
+        aria-live="polite"
+        aria-label="Chat messages"
+      ></div>
+      <form id="chat-form" autocomplete="off" aria-label="Chat input area">
+        <input
+          type="text"
+          id="chat-input"
+          placeholder="Ask about this page..."
+          autocomplete="off"
+          required
+          aria-label="Type your question about this page"
+        />
+        <button type="submit" id="send-btn" aria-label="Send message">
+          Send
+        </button>
+      </form>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

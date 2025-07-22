@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "PageAI Chatbot",
+  "version": "1.0",
+  "description": "ChatGPT-powered chatbot that answers questions about the current page.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "icons": {
+    "16": "icon16.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "pageai-chatbot@example.com",
+      "strict_min_version": "109.0"
+    }
+  }
+}
