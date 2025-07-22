@@ -1,0 +1,17 @@
+{
+    "name": "pageai-backend",
+    "version": "1.0.0",
+    "description": "Backend proxy server for PageAI Chatbot extension.",
+    "main": "proxy-server.js",
+    "scripts": {
+        "start": "node proxy-server.js"
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "express": "^5.1.0",
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.0",
+        "axios": "^1.10.0"
+    }
+}
