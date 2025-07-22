@@ -19,6 +19,7 @@ const openaiKey = "";
 const geminiKey = "";
 const grokKey = "";
 const anthropicKey = "";
+const claudeKey = "";
 
 // (const openaiKey = ...; const geminiKey = ...; etc.)
 
@@ -140,6 +141,62 @@ ext.tabs.query({ active: true, currentWindow: true }, (tabs) => {
 });
 
 // Handle sending a message
+// Extract only content, title, and alt tags from HTML
+function extractRelevantContent(html) {
+  // Create a DOM parser
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  // Get <title>
+  let title = doc.querySelector("title")?.innerText || "";
+
+  // Remove scripts, styles, meta, link, noscript, iframe, and head
+  const removeTags = [
+    "script",
+    "style",
+    "meta",
+    "link",
+    "noscript",
+    "iframe",
+    "head",
+  ];
+  removeTags.forEach((tag) => {
+    doc.querySelectorAll(tag).forEach((el) => el.remove());
+  });
+
+  // Get all alt attributes
+  let alts = Array.from(doc.querySelectorAll("[alt]"))
+    .map((el) => el.getAttribute("alt"))
+    .filter(Boolean);
+
+  // Get visible text content (excluding hidden elements)
+  function getVisibleText(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+    const style = window.getComputedStyle
+      ? window.getComputedStyle(node)
+      : null;
+    if (style && (style.display === "none" || style.visibility === "hidden"))
+      return "";
+    let text = "";
+    for (let child of node.childNodes) {
+      text += getVisibleText(child);
+    }
+    return text;
+  }
+  let bodyText = getVisibleText(doc.body || doc);
+
+  // Combine all
+  let result = "";
+  if (title) result += `Title: ${title}\n`;
+  if (alts.length) result += `Alt tags: ${alts.join(" | ")}\n`;
+  result += bodyText.trim();
+  return result;
+}
+
+// In chatForm submit handler, preprocess pageHtml before sending to askChatAPI
 chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (indexStatusShown) {
@@ -157,7 +214,8 @@ chatForm.addEventListener("submit", async (e) => {
   chatInput.focus();
   // Call AI API
   try {
-    const answer = await askChatAPI(question, pageHtml);
+    const filteredHtml = extractRelevantContent(pageHtml);
+    const answer = await askChatAPI(question, filteredHtml);
     conversation.push({ role: "bot", content: answer });
     isLoading = false;
     renderMessages();
@@ -250,10 +308,7 @@ async function askChatAPI(question, html) {
       Authorization: "Bearer " + window.apiKey,
     };
     model = "gpt-3.5-turbo";
-    const systemPrompt = `You are an expert on the following HTML page. Answer questions using only the information in the page.\n\nPAGE HTML:\n${html.substring(
-      0,
-      12000
-    )}`;
+    const systemPrompt = buildSystemPrompt(html);
     const filtered = conversation.filter(
       (m) => m.role === "user" || m.role === "bot"
     );
@@ -281,10 +336,7 @@ async function askChatAPI(question, html) {
       Authorization: "Bearer " + window.apiKey,
     };
     model = "grok-1";
-    const systemPrompt = `You are an expert on the following HTML page. Answer questions using only the information in the page.\n\nPAGE HTML:\n${html.substring(
-      0,
-      12000
-    )}`;
+    const systemPrompt = buildSystemPrompt(html);
     const filtered = conversation.filter(
       (m) => m.role === "user" || m.role === "bot"
     );
@@ -312,10 +364,7 @@ async function askChatAPI(question, html) {
     headers = {
       "Content-Type": "application/json",
     };
-    const context = `You are an expert on the following HTML page. Answer questions using only the information in the page.\n\nPAGE HTML:\n${html.substring(
-      0,
-      12000
-    )}`;
+    const context = buildSystemPrompt(html);
     const filtered = conversation.filter(
       (m) => m.role === "user" || m.role === "bot"
     );
@@ -341,10 +390,7 @@ async function askChatAPI(question, html) {
       "x-api-key": window.apiKey,
       "anthropic-version": "2023-06-01",
     };
-    const context = `You are an expert on the following HTML page. Answer questions using only the information in the page.\n\nPAGE HTML:\n${html.substring(
-      0,
-      12000
-    )}`;
+    const context = buildSystemPrompt(html);
     const filtered = conversation.filter(
       (m) => m.role === "user" || m.role === "bot"
     );
@@ -412,4 +458,8 @@ async function askChatAPI(question, html) {
     // Example: adjust this to match your provider's response format
     return data.answer || data.result || "No answer.";
   }
+}
+
+function buildSystemPrompt(pageContent) {
+  return `You are an expert on the following HTML page. By default, answer questions using only the information in the page. If the user's question clearly requests outside information, research, or a comparison to outside info, you may use your own knowledge or research, but always try as hard as possible to relate your answer to the page content.\n\nPAGE CONTENT:\n${pageContent}`;
 }
