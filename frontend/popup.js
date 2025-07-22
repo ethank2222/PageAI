@@ -18,6 +18,9 @@ const clearPageBtn = document.getElementById("clear-page-btn");
 const clearAllBtn = document.getElementById("clear-all-btn");
 const sendBtn = document.getElementById("send-btn");
 
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+
 let currentTabId = null;
 let pageKey = null;
 let pageHtml = null;
@@ -50,14 +53,26 @@ function renderMessages() {
         conversation.slice(1).forEach((msg) => {
             const div = document.createElement("div");
             div.className = "message " + msg.role;
-            div.textContent = msg.content;
+            if (msg.role === "bot") {
+                // Render markdown for bot responses, sanitized
+                const rawHtml = marked.parse(msg.content);
+                div.innerHTML = DOMPurify.sanitize(rawHtml);
+            } else {
+                div.textContent = msg.content;
+            }
             chatMessages.appendChild(div);
         });
     } else {
         conversation.forEach((msg) => {
             const div = document.createElement("div");
             div.className = "message " + msg.role;
-            div.textContent = msg.content;
+            if (msg.role === "bot") {
+                // Render markdown for bot responses, sanitized
+                const rawHtml = marked.parse(msg.content);
+                div.innerHTML = DOMPurify.sanitize(rawHtml);
+            } else {
+                div.textContent = msg.content;
+            }
             chatMessages.appendChild(div);
         });
     }

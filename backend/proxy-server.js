@@ -10,9 +10,12 @@ app.use(express.json());
 app.use(cors({ origin: "*", credentials: false }));
 
 function logQuestion(provider, question) {
+    /*
     const now = new Date();
     const timestamp = now.toISOString().replace("T", " ").substring(0, 19);
     console.log(`[${provider}] [${timestamp}] Question:`, question);
+    */
+    console.log("question asked");
 }
 
 // Proxy for Anthropic Claude
