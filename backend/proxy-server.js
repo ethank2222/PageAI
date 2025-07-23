@@ -76,10 +76,20 @@ app.post("/api/openai", async (req, res) => {
 });
 
 // Proxy for Gemini (Google)
+// Docs: https://ai.google.dev/gemini-api/docs/text-generation
 app.post("/api/gemini", async (req, res) => {
   let lastUserMsg = undefined;
-  if (Array.isArray(req.body.contents)) {
-    const last = req.body.contents.slice(-1)[0];
+  let contents = req.body.contents;
+  // If not provided, try to build from prompt
+  if (!contents && req.body.prompt) {
+    contents = [
+      {
+        parts: [{ text: req.body.prompt }],
+      },
+    ];
+  }
+  if (Array.isArray(contents)) {
+    const last = contents.slice(-1)[0];
     if (last && Array.isArray(last.parts) && last.parts[0]) {
       lastUserMsg = last.parts[0].text;
     }
@@ -90,11 +100,14 @@ app.post("/api/gemini", async (req, res) => {
   }
   try {
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      req.body,
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      {
+        contents: contents,
+      },
       {
         headers: {
           "Content-Type": "application/json",
+          "x-goog-api-key": process.env.GEMINI_API_KEY,
         },
       }
     );
@@ -106,7 +119,9 @@ app.post("/api/gemini", async (req, res) => {
   }
 });
 
-// Proxy for Grok
+// Proxy for Grok (xAI)
+// Official API: https://api.aimlapi.com/v1/chat/completions
+// Docs: https://docs.aimlapi.com/api-references/text-models-llm/xai/grok-3-beta
 app.post("/api/grok", async (req, res) => {
   const lastUserMsg = Array.isArray(req.body.messages)
     ? req.body.messages.filter((m) => m.role === "user").slice(-1)[0]?.content
@@ -117,8 +132,14 @@ app.post("/api/grok", async (req, res) => {
   }
   try {
     const response = await axios.post(
-      "https://api.grok.com/v1/chat/completions",
-      req.body,
+      "https://api.aimlapi.com/v1/chat/completions",
+      {
+        model: "x-ai/grok-3-beta",
+        messages: req.body.messages || [
+          { role: "user", content: req.body.prompt || "" },
+        ],
+        // You can add more parameters here if needed
+      },
       {
         headers: {
           "Content-Type": "application/json",
