@@ -121,7 +121,7 @@ app.post("/api/gemini", async (req, res) => {
 
 app.post("/api/grok", async (req, res) => {
   // Validate API key
-  if (!process.env.XAI_API_KEY) {
+  if (!process.env.GROK_API_KEY) {
     return res
       .status(400)
       .json({ error: "xAI API key not set in environment variables" });
