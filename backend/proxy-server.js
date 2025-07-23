@@ -168,7 +168,7 @@ app.post("/api/grok", async (req, res) => {
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.XAI_API_KEY}`,
+          Authorization: `Bearer ${process.env.GROK_API_KEY}`,
         },
         timeout: 30000, // Add timeout to prevent hanging
       }
