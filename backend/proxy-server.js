@@ -119,39 +119,77 @@ app.post("/api/gemini", async (req, res) => {
   }
 });
 
-// Proxy for Grok (xAI)
-// Official API: https://api.aimlapi.com/v1/chat/completions
-// Docs: https://docs.aimlapi.com/api-references/text-models-llm/xai/grok-3-beta
 app.post("/api/grok", async (req, res) => {
-  const lastUserMsg = Array.isArray(req.body.messages)
-    ? req.body.messages.filter((m) => m.role === "user").slice(-1)[0]?.content
-    : undefined;
-  logQuestion("Grok", lastUserMsg || req.body.prompt || "[unknown]");
-  if (!process.env.GROK_API_KEY) {
-    return res.status(400).json({ error: "Grok API key not set in .env" });
+  // Validate API key
+  if (!process.env.XAI_API_KEY) {
+    return res
+      .status(400)
+      .json({ error: "xAI API key not set in environment variables" });
   }
+
+  // Validate request body
+  const { messages, prompt } = req.body;
+  let requestMessages = [];
+
+  if (Array.isArray(messages) && messages.length > 0) {
+    // Ensure messages are valid and contain at least one user message
+    const validMessages = messages.filter(
+      (m) => typeof m === "object" && m.role && typeof m.content === "string"
+    );
+    if (validMessages.length === 0) {
+      return res.status(400).json({ error: "No valid messages provided" });
+    }
+    requestMessages = validMessages;
+  } else if (typeof prompt === "string" && prompt.trim()) {
+    // Fallback to prompt if messages are not provided
+    requestMessages = [{ role: "user", content: prompt.trim() }];
+  } else {
+    return res
+      .status(400)
+      .json({ error: "Either 'messages' or 'prompt' must be provided" });
+  }
+
+  // Log the last user message (sanitize to prevent log injection)
+  const lastUserMsg =
+    requestMessages.filter((m) => m.role === "user").slice(-1)[0]?.content ||
+    "[unknown]";
+  console.log(`Grok Question: ${lastUserMsg.replace(/[\n\r\t]/g, " ")}`); // Basic sanitization
+
   try {
     const response = await axios.post(
-      "https://api.aimlapi.com/v1/chat/completions",
+      "https://api.x.ai/v1/chat/completions", // Official xAI API endpoint
       {
-        model: "x-ai/grok-3-beta",
-        messages: req.body.messages || [
-          { role: "user", content: req.body.prompt || "" },
-        ],
-        // You can add more parameters here if needed
+        model: "grok-3", // Use the correct model name (verify with xAI docs)
+        messages: requestMessages,
+        // Optional parameters (adjust as needed)
+        temperature: 0.7,
+        max_tokens: 1000,
       },
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GROK_API_KEY}`,
+          Authorization: `Bearer ${process.env.XAI_API_KEY}`,
         },
+        timeout: 30000, // Add timeout to prevent hanging
       }
     );
+
+    // Return the API response
     res.json(response.data);
   } catch (err) {
-    res.status(err.response?.status || 500).json({
-      error: err.response?.data || err.message,
-    });
+    console.error("Grok API error:", err.message);
+    if (err.response) {
+      // Handle HTTP errors
+      res.status(err.response.status).json({
+        error: err.response.data?.error || "Grok API request failed",
+      });
+    } else if (err.code === "ECONNABORTED") {
+      // Handle timeout
+      res.status(504).json({ error: "Request to Grok API timed out" });
+    } else {
+      // Handle other errors (network, parsing, etc.)
+      res.status(500).json({ error: "Internal server error" });
+    }
   }
 });
 
