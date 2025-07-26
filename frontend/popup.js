@@ -28,8 +28,6 @@ let conversation = [];
 let isLoading = false;
 let indexStatusShown = false;
 
-// Remove all API key variables from the client
-
 // Helper: Render chat messages
 function renderMessages() {
   chatMessages.innerHTML = "";
@@ -90,44 +88,36 @@ function renderMessages() {
 function savePageData() {
   if (pageKey && pageHtml) {
     // Ensure the first message is the page indexed link only if no user/bot messages exist
-    ext.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tab = tabs[0];
-      const currentUrl = tab.url;
-      const currentTitle = tab.title || extractTitle(pageHtml) || "(No title)";
-      const indexedMsg = {
-        role: "system",
-        type: "page-indexed-link",
-        content: "Page indexed successfully!",
-        url: currentUrl,
-        title: currentTitle,
-      };
-      const hasUserOrBot = conversation.some(
-        (m) => m.role === "user" || m.role === "bot"
-      );
-      let newConversation = conversation;
-      if (hasUserOrBot) {
-        // Remove the indexed message if present
-        if (
-          conversation.length &&
-          conversation[0].type === "page-indexed-link"
-        ) {
-          newConversation = conversation.slice(1);
-        }
-      } else {
-        if (
-          !conversation.length ||
-          conversation[0].type !== "page-indexed-link"
-        ) {
-          newConversation = [indexedMsg, ...conversation];
-        } else {
-          // Update the link if the URL/title changed
-          newConversation = [...conversation];
-          newConversation[0] = indexedMsg;
-        }
+    const indexedMsg = {
+      role: "system",
+      type: "page-indexed-link",
+      content: "Page indexed successfully!",
+      url: pageKey.replace(/^pageAI_/, ""),
+      title: extractTitle(pageHtml) || "(No title)",
+    };
+    const hasUserOrBot = conversation.some(
+      (m) => m.role === "user" || m.role === "bot"
+    );
+    let newConversation = conversation;
+    if (hasUserOrBot) {
+      // Remove the indexed message if present
+      if (conversation.length && conversation[0].type === "page-indexed-link") {
+        newConversation = conversation.slice(1);
       }
-      ext.storage.local.set({
-        [pageKey]: { conversation: newConversation, pageHtml },
-      });
+    } else {
+      if (
+        !conversation.length ||
+        conversation[0].type !== "page-indexed-link"
+      ) {
+        newConversation = [indexedMsg, ...conversation];
+      } else {
+        // Update the link if the URL/title changed
+        newConversation = [...conversation];
+        newConversation[0] = indexedMsg;
+      }
+    }
+    ext.storage.local.set({
+      [pageKey]: { conversation: newConversation, pageHtml },
     });
   }
 }
@@ -187,9 +177,6 @@ function renderHistorySidebar() {
       titleSpan.style.flex = "1";
       li.appendChild(titleSpan);
 
-      // Remove external link button/icon
-      // (No button appended)
-
       // Unified click handler for the whole row
       li.onclick = (e) => {
         // Open the page in a new tab
@@ -226,92 +213,176 @@ function renderInsights(history) {
 // Show history sidebar on load
 renderHistorySidebar();
 
-// Helper to get page HTML, with auto-injection fallback
-function getPageHtmlWithInjection(tabId, callback) {
-  ext.tabs.sendMessage(tabId, { type: "GET_PAGE_HTML" }, (response) => {
-    if (
-      chrome.runtime &&
-      chrome.runtime.lastError &&
-      chrome.runtime.lastError.message.includes(
-        "Could not establish connection"
-      )
-    ) {
-      // Try to inject content.js, then retry
-      if (chrome.scripting && chrome.scripting.executeScript) {
-        chrome.scripting.executeScript(
-          {
-            target: { tabId },
-            files: ["content.js"],
-          },
-          () => {
-            // Retry after injection
-            ext.tabs.sendMessage(
-              tabId,
-              { type: "GET_PAGE_HTML" },
-              (response2) => {
-                if (chrome.runtime && chrome.runtime.lastError) {
-                  console.error(
-                    "Retry after injection failed:",
-                    chrome.runtime.lastError.message
-                  );
-                  callback(null, chrome.runtime.lastError.message);
-                } else {
-                  callback(response2, null);
-                }
-              }
-            );
+// Function to get page HTML with backend fallback
+async function getPageHtml() {
+  try {
+    // Get the active tab
+    const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
+    currentTabId = tab.id;
+    pageKey = "pageAI_" + (tab.url || "").split("#")[0];
+
+    const statusDiv = document.getElementById("index-status");
+
+    // Try content script first with retry mechanism
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        if (attempt > 1) {
+          console.log(`Content script retry attempt ${attempt}...`);
+          if (statusDiv) {
+            statusDiv.textContent = `Retrying content script (attempt ${attempt}/3)...`;
           }
+          // Wait before retry
+          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+        }
+
+        const response = await ext.tabs.sendMessage(tab.id, {
+          type: "GET_PAGE_HTML",
+        });
+
+        if (response && response.html) {
+          pageHtml = response.html;
+          if (statusDiv) {
+            statusDiv.textContent = "Page indexed successfully!";
+            statusDiv.style.display = "block";
+            indexStatusShown = true;
+          }
+          loadPageData(() => {
+            chatInput && chatInput.focus();
+          });
+          return;
+        } else if (response && response.error) {
+          console.log("Content script returned error:", response.error);
+          throw new Error(response.error);
+        }
+      } catch (contentScriptError) {
+        console.log(
+          `Content script attempt ${attempt} failed:`,
+          contentScriptError.message
         );
-      } else {
-        console.error(
-          "chrome.scripting.executeScript not available or not permitted."
-        );
-        callback(null, chrome.runtime.lastError.message);
+        if (attempt === 3) {
+          console.log(
+            "All content script attempts failed, trying backend fallback..."
+          );
+        }
       }
-    } else if (chrome.runtime && chrome.runtime.lastError) {
-      console.error("Other runtime error:", chrome.runtime.lastError.message);
-      callback(null, chrome.runtime.lastError.message);
-    } else {
-      callback(response, null);
     }
-  });
+
+    // Fallback: Use backend to fetch page content
+    if (statusDiv) {
+      statusDiv.textContent = "Fetching page content via backend...";
+      statusDiv.style.display = "block";
+      indexStatusShown = true;
+    }
+
+    // Try production backend first, then local development backend
+    let backendResponse;
+    try {
+      backendResponse = await fetch(
+        "https://pageai-production.up.railway.app/api/fetch-page",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ url: tab.url }),
+        }
+      );
+    } catch (productionError) {
+      console.log("Production backend failed, trying local backend...");
+      try {
+        backendResponse = await fetch("http://localhost:3001/api/fetch-page", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ url: tab.url }),
+        });
+      } catch (localError) {
+        console.error("Both production and local backends failed");
+        throw new Error("Backend unavailable");
+      }
+    }
+
+    if (backendResponse.ok) {
+      const data = await backendResponse.json();
+      if (data.success && data.html) {
+        pageHtml = data.html;
+        if (statusDiv) {
+          statusDiv.textContent = "Page indexed successfully! (via backend)";
+          statusDiv.style.display = "block";
+          indexStatusShown = true;
+        }
+        loadPageData(() => {
+          chatInput && chatInput.focus();
+        });
+        return;
+      } else if (data.error) {
+        throw new Error(data.error);
+      }
+    } else {
+      const errorText = await backendResponse.text();
+      throw new Error(
+        `Backend error: ${backendResponse.status} - ${errorText}`
+      );
+    }
+
+    throw new Error("Both content script and backend failed");
+  } catch (error) {
+    console.error("Error getting page HTML:", error);
+    const statusDiv = document.getElementById("index-status");
+
+    // Final fallback: Create basic page info from tab data
+    if (tab && tab.title && tab.url) {
+      pageHtml = `# Page Title\n${tab.title}\n\n## URL\n${tab.url}\n\n## Note\nThis page content could not be fully accessed. You can ask general questions about the page title and URL, but detailed content analysis may not be available.`;
+
+      if (statusDiv) {
+        statusDiv.textContent = "Limited page access - using basic page info";
+        statusDiv.style.display = "block";
+        indexStatusShown = true;
+      }
+
+      loadPageData(() => {
+        chatInput && chatInput.focus();
+      });
+      return;
+    }
+
+    if (statusDiv) {
+      statusDiv.textContent =
+        "Could not access page content. This extension only works on normal web pages.";
+      statusDiv.style.display = "block";
+      indexStatusShown = true;
+    }
+  }
 }
 
 // On popup open, always show the indexed message at the top if there are no user or bot messages
 function ensureIndexedMessage(cb) {
-  ext.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const tab = tabs[0];
-    const currentUrl = tab.url;
-    const currentTitle = tab.title || extractTitle(pageHtml) || "(No title)";
-    const indexedMsg = {
-      role: "system",
-      type: "page-indexed-link",
-      content: "Page indexed successfully!",
-      url: currentUrl,
-      title: currentTitle,
-    };
-    // Check if any user or bot messages exist
-    const hasUserOrBot = conversation.some(
-      (m) => m.role === "user" || m.role === "bot"
-    );
-    if (hasUserOrBot) {
-      // Remove the indexed message if present
-      if (conversation.length && conversation[0].type === "page-indexed-link") {
-        conversation = conversation.slice(1);
-      }
-    } else {
-      if (
-        !conversation.length ||
-        conversation[0].type !== "page-indexed-link"
-      ) {
-        conversation = [indexedMsg, ...conversation];
-      } else {
-        // Update the link if the URL/title changed
-        conversation[0] = indexedMsg;
-      }
+  const indexedMsg = {
+    role: "system",
+    type: "page-indexed-link",
+    content: "Page indexed successfully!",
+    url: pageKey ? pageKey.replace(/^pageAI_/, "") : "",
+    title: extractTitle(pageHtml) || "(No title)",
+  };
+  // Check if any user or bot messages exist
+  const hasUserOrBot = conversation.some(
+    (m) => m.role === "user" || m.role === "bot"
+  );
+  if (hasUserOrBot) {
+    // Remove the indexed message if present
+    if (conversation.length && conversation[0].type === "page-indexed-link") {
+      conversation = conversation.slice(1);
     }
-    if (cb) cb();
-  });
+  } else {
+    if (!conversation.length || conversation[0].type !== "page-indexed-link") {
+      conversation = [indexedMsg, ...conversation];
+    } else {
+      // Update the link if the URL/title changed
+      conversation[0] = indexedMsg;
+    }
+  }
+  if (cb) cb();
 }
 
 // Helper: Remove the indexed message if any user or bot messages exist
@@ -359,59 +430,11 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Get current tab and page info
-  ext.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const tab = tabs[0];
-    currentTabId = tab.id;
-    pageKey = "pageAI_" + (tab.url || "").split("#")[0];
-    // Inject content.js only when popup is opened
-    if (chrome.scripting && chrome.scripting.executeScript) {
-      chrome.scripting.executeScript(
-        {
-          target: { tabId: currentTabId },
-          files: ["content.js"],
-        },
-        () => {
-          // Now send the message to get page HTML
-          ext.tabs.sendMessage(
-            currentTabId,
-            { type: "GET_PAGE_HTML" },
-            (response) => {
-              const statusDiv = document.getElementById("index-status");
-              if (chrome.runtime && chrome.runtime.lastError) {
-                console.error(chrome.runtime.lastError.message);
-                if (statusDiv) {
-                  statusDiv.textContent =
-                    "Could not connect to content script. This extension only works on normal web pages. It cannot access Chrome system pages, the Web Store, or some special pages.";
-                  statusDiv.style.display = "block";
-                  indexStatusShown = true;
-                }
-                return;
-              }
-              pageHtml = response && response.html ? response.html : "";
-              loadPageData(() => {
-                chatInput && chatInput.focus();
-              });
-              if (statusDiv) {
-                if (pageHtml) {
-                  statusDiv.textContent = "Page indexed successfully!";
-                  statusDiv.style.display = "block";
-                  indexStatusShown = true;
-                } else {
-                  statusDiv.textContent = "Failed to index page.";
-                  statusDiv.style.display = "block";
-                  indexStatusShown = true;
-                }
-              }
-            }
-          );
-        }
-      );
-    }
-  });
+  // Initialize by getting page HTML
+  getPageHtml();
 
   // Handle sending a message
-  // Extract only content, title, and alt tags from HTML
+  // Extract only content, title, and alt tags from HTML with security measures
   function extractRelevantContent(html) {
     // Create a DOM parser
     const parser = new DOMParser();
@@ -420,8 +443,12 @@ document.addEventListener("DOMContentLoaded", function () {
     // Get <title>
     let title = doc.querySelector("title")?.innerText || "";
 
-    // Remove scripts, styles, meta, link, noscript, iframe, and head
-    const removeTags = [
+    // SECURITY: Remove all sensitive elements and attributes
+    const sensitiveSelectors = [
+      "input",
+      "textarea",
+      "select",
+      "form",
       "script",
       "style",
       "meta",
@@ -429,12 +456,105 @@ document.addEventListener("DOMContentLoaded", function () {
       "noscript",
       "iframe",
       "head",
+      "object",
+      "embed",
+      "applet",
+      "[data-*]",
+      "[aria-*]",
+      '[class*="password"]',
+      '[class*="email"]',
+      '[class*="phone"]',
+      '[class*="credit"]',
+      '[class*="card"]',
+      '[class*="ssn"]',
+      '[class*="social"]',
+      '[class*="account"]',
+      '[class*="user"]',
+      '[class*="login"]',
+      '[class*="secret"]',
+      '[class*="private"]',
+      '[class*="personal"]',
+      '[class*="confidential"]',
+      '[id*="password"]',
+      '[id*="email"]',
+      '[id*="phone"]',
+      '[id*="credit"]',
+      '[id*="card"]',
+      '[id*="ssn"]',
+      '[id*="social"]',
+      '[id*="account"]',
+      '[id*="user"]',
+      '[id*="login"]',
+      '[id*="secret"]',
+      '[id*="private"]',
+      '[id*="personal"]',
+      '[id*="confidential"]',
     ];
-    removeTags.forEach((tag) => {
-      doc.querySelectorAll(tag).forEach((el) => el.remove());
+
+    // Remove all sensitive elements
+    sensitiveSelectors.forEach((selector) => {
+      doc.querySelectorAll(selector).forEach((el) => el.remove());
     });
 
-    // Get all alt attributes
+    // SECURITY: Remove all comments
+    const walker = document.createTreeWalker(
+      doc,
+      NodeFilter.SHOW_COMMENT,
+      null,
+      false
+    );
+    const commentsToRemove = [];
+    let comment;
+    while ((comment = walker.nextNode())) {
+      commentsToRemove.push(comment);
+    }
+    commentsToRemove.forEach((comment) => comment.remove());
+
+    // SECURITY: Remove all sensitive attributes from remaining elements
+    const allElements = doc.querySelectorAll("*");
+    allElements.forEach((el) => {
+      const attrs = el.attributes;
+      for (let i = attrs.length - 1; i >= 0; i--) {
+        const attr = attrs[i];
+        if (
+          attr.name.startsWith("data-") ||
+          attr.name.startsWith("aria-") ||
+          attr.name.includes("password") ||
+          attr.name.includes("email") ||
+          attr.name.includes("phone") ||
+          attr.name.includes("credit") ||
+          attr.name.includes("card") ||
+          attr.name.includes("ssn") ||
+          attr.name.includes("social") ||
+          attr.name.includes("account") ||
+          attr.name.includes("user") ||
+          attr.name.includes("login") ||
+          attr.name.includes("secret") ||
+          attr.name.includes("private") ||
+          attr.name.includes("personal") ||
+          attr.name.includes("confidential")
+        ) {
+          el.removeAttribute(attr.name);
+        }
+      }
+    });
+
+    // Extract headings for better structure
+    const headings = Array.from(
+      doc.querySelectorAll("h1, h2, h3, h4, h5, h6")
+    ).map((heading) => {
+      const level = parseInt(heading.tagName.charAt(1));
+      return { level, text: heading.innerText.trim() };
+    });
+
+    // Extract lists for better structure
+    const lists = Array.from(doc.querySelectorAll("ul, ol")).map((list) => {
+      return Array.from(list.querySelectorAll("li")).map((item) =>
+        item.innerText.trim()
+      );
+    });
+
+    // Get all alt attributes (safe to keep)
     let alts = Array.from(doc.querySelectorAll("[alt]"))
       .map((el) => el.getAttribute("alt"))
       .filter(Boolean);
@@ -458,11 +578,48 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     let bodyText = getVisibleText(doc.body || doc);
 
-    // Combine all
+    // SECURITY: Additional text sanitization
+    bodyText = bodyText
+      .replace(
+        /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
+        "[EMAIL]"
+      ) // Remove emails
+      .replace(/\b\d{3}-\d{2}-\d{4}\b/g, "[SSN]") // Remove SSNs
+      .replace(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, "[CREDIT_CARD]") // Remove credit cards
+      .replace(/\b\d{3}[\s-]?\d{3}[\s-]?\d{4}\b/g, "[PHONE]") // Remove phone numbers
+      .replace(/\b\d{10,}\b/g, "[NUMBER]") // Remove long numbers
+      .replace(/\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b/g, "[IBAN]") // Remove IBANs
+      .replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, "[IP_ADDRESS]"); // Remove IP addresses
+
+    // Combine all with better structure
     let result = "";
-    if (title) result += `Title: ${title}\n`;
-    if (alts.length) result += `Alt tags: ${alts.join(" | ")}\n`;
-    result += bodyText.trim();
+    if (title) result += `# Page Title\n${title}\n\n`;
+
+    if (headings.length > 0) {
+      result += `## Page Structure\n`;
+      headings.forEach((heading) => {
+        const prefix = "#".repeat(heading.level);
+        result += `${prefix} ${heading.text}\n`;
+      });
+      result += "\n";
+    }
+
+    if (lists.length > 0) {
+      result += `## Lists Found\n`;
+      lists.forEach((list, index) => {
+        result += `### List ${index + 1}\n`;
+        list.forEach((item) => {
+          result += `- ${item}\n`;
+        });
+        result += "\n";
+      });
+    }
+
+    if (alts.length) {
+      result += `## Image Alt Text\n${alts.join(" | ")}\n\n`;
+    }
+
+    result += `## Main Content\n${bodyText.trim()}`;
     return result;
   }
 
@@ -721,7 +878,35 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function buildSystemPrompt(pageContent) {
-    return `You are an expert on the following HTML page. By default, answer questions using only the information in the page. If the user's question clearly requests outside information, research, or a comparison to outside info, you may use your own knowledge or research, but always try as hard as possible to relate your answer to the page content.\n\nPAGE CONTENT:\n${pageContent}`;
+    return `You are an expert on the following HTML page. By default, answer questions using only the information in the page. If the user's question clearly requests outside information, research, or a comparison to outside info, you may use your own knowledge or research, but always try as hard as possible to relate your answer to the page content.
+
+IMPORTANT: Always format your responses using proper markdown formatting to make them clear, readable, and well-structured. Use:
+
+- **Headers** (# ## ###) to organize different sections
+- **Bold text** (**text**) for emphasis and key points
+- **Bullet points** (- or *) for lists and key takeaways
+- **Numbered lists** (1. 2. 3.) for step-by-step instructions
+- **Code blocks** (\`\`\`language) for code examples, commands, or technical content
+- **Inline code** (\`code\`) for technical terms, file names, or short code snippets
+- **Blockquotes** (> text) for important notes or warnings
+- **Tables** for comparing information or data
+- **Links** ([text](url)) when referencing external resources
+- **Horizontal rules** (---) to separate sections
+
+**Response Guidelines:**
+- Start with a brief summary or overview
+- Use headers to break up different topics or sections
+- Include bullet points for key information, features, or takeaways
+- Use numbered lists for step-by-step processes or instructions
+- Highlight important terms or concepts in **bold**
+- Use code formatting for technical terms, commands, or file names
+- Include blockquotes for important notes, warnings, or quotes
+- End with a conclusion or summary when appropriate
+
+Structure your responses logically with clear sections, use headers to break up long answers, and make sure the formatting enhances readability.
+
+PAGE CONTENT:
+${pageContent}`;
   }
 
   // Provider selection logic

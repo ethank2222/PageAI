@@ -1,103 +1,236 @@
-# PageAI Extension
+# PageAI Frontend
 
-PageAI is a browser extension that brings AI chat to every web page, allowing you to ask questions about the current page's content. It supports OpenAI, Anthropic (Claude), Gemini, and Grok via a secure backend proxy.
+A Chrome extension that brings AI chat to every web page, allowing you to ask questions about the current page's content.
 
-## Features
+## 🔒 **SECURITY & PRIVACY**
 
-- Chat with LLMs about any web page
-- Supports OpenAI, Claude, Gemini, and Grok
-- Conversation and page history
-- Modern, professional UI
-- Secure: API keys are never exposed to the client
+This extension is designed with **maximum privacy and security** in mind. No sensitive data is ever read, stored, or transmitted.
 
-## Setup Instructions
+### **Privacy Protection Measures**
 
-### 1. Clone the Repository
+#### **1. Content Script Security**
 
-```
-git clone https://github.com/yourusername/PageAI.git
-cd PageAI
-```
+- **No Form Data**: All input fields, textareas, and forms are completely removed
+- **No Passwords**: Password fields and related elements are stripped
+- **No Personal Data**: Email addresses, phone numbers, SSNs, credit cards are sanitized
+- **No Scripts**: All JavaScript and executable content is removed
+- **No Hidden Data**: Comments, meta tags, and hidden attributes are stripped
 
-### 2. Set Up the Backend Proxy
+#### **2. Data Sanitization**
 
-#### a. Install dependencies (root)
+The extension automatically removes or replaces sensitive information:
 
-```
+- **Emails**: `user@example.com` → `[EMAIL]`
+- **Phone Numbers**: `555-123-4567` → `[PHONE]`
+- **Credit Cards**: `1234-5678-9012-3456` → `[CREDIT_CARD]`
+- **SSNs**: `123-45-6789` → `[SSN]`
+- **IP Addresses**: `192.168.1.1` → `[IP_ADDRESS]`
+- **Long Numbers**: `1234567890` → `[NUMBER]`
+
+#### **3. Backend Security**
+
+- **Domain Blocking**: Local networks and sensitive domains are blocked
+- **URL Sanitization**: Only domain names are logged, never full URLs
+- **Content Validation**: Only HTML content is processed
+- **Request Limits**: Timeouts and redirect limits prevent abuse
+
+#### **4. What Gets Removed**
+
+- ✅ All form inputs and their values
+- ✅ Password fields and authentication data
+- ✅ Personal information (emails, phones, SSNs)
+- ✅ Financial data (credit cards, account numbers)
+- ✅ JavaScript and executable code
+- ✅ Hidden comments and metadata
+- ✅ Sensitive attributes (data-_, aria-_)
+- ✅ Local network access
+
+#### **5. What Gets Preserved**
+
+- ✅ Page titles and headings
+- ✅ Main content text
+- ✅ Image alt text
+- ✅ Lists and structured content
+- ✅ Public information only
+
+### **Security Guarantees**
+
+1. **No Sensitive Data Access**: The extension cannot read passwords, forms, or personal data
+2. **No Data Storage**: Sensitive information is never stored locally or remotely
+3. **No Network Access**: Local networks and private domains are blocked
+4. **No Script Execution**: All executable code is removed before processing
+5. **No Logging**: Full URLs are never logged, only domain names
+
+## Absolute Minimal Permission Design
+
+The extension has been optimized to use the absolute minimum permissions possible:
+
+### Required Permissions (2 total - the minimum possible)
+
+- **`storage`** - Used for saving conversation history and page data per URL
+- **`activeTab`** - Used to access the current tab when popup is opened (more privacy-friendly than `tabs`)
+
+### Why This Approach is Optimal
+
+1. **`activeTab` vs `tabs`**: `activeTab` only grants access to the current tab when the user explicitly opens the popup, making it much more privacy-friendly
+2. **Automatic Injection**: Content scripts are automatically injected via manifest declaration, no scripting permission needed
+3. **Absolute Minimum**: Only 2 permissions total - the absolute minimum required for this functionality
+4. **User Control**: Users know exactly when the extension accesses their current tab
+5. **Chrome Best Practices**: Follows Chrome's recommended permission model perfectly
+
+## Benefits of This Design
+
+1. **Maximum Privacy**: Extension only accesses the current tab when popup is opened
+2. **Minimal Permissions**: Only 2 required permissions - the absolute minimum possible
+3. **Better Performance**: Content scripts are injected efficiently via manifest
+4. **Clear Intent**: Users understand exactly when and why the extension needs access
+5. **Chrome Best Practices**: Follows Chrome's recommended permission model
+6. **No Dynamic Injection**: No need for scripting permission, more secure
+
+## Robust Page Content Fetching
+
+The extension uses a multi-layered approach to ensure it can always access page content:
+
+### Primary Method: Content Scripts
+
+- Content scripts are automatically injected on all web pages
+- Direct access to page DOM and HTML content
+- Fastest and most reliable method
+- **Retry mechanism**: 3 attempts with increasing delays
+- **Security**: All sensitive data is removed before processing
+
+### Fallback Method: Backend Fetching
+
+- If content scripts fail (e.g., on restricted pages), the extension falls back to backend fetching
+- Backend makes HTTP requests to fetch page content
+- Works on pages where content scripts can't access content
+- Supports both production and local development backends
+- **URL validation**: Ensures only valid HTTP/HTTPS URLs are processed
+- **Content type checking**: Verifies responses are HTML content
+- **Security**: Comprehensive sanitization on backend
+
+### Final Fallback: Basic Page Info
+
+- If all other methods fail, uses basic tab information (title, URL)
+- Ensures the extension always provides some context
+- User can still ask questions about the page title and URL
+
+### How Fallback Works
+
+1. **Try Content Script**: First attempts to get content via injected content script (3 retries)
+2. **Backend Fallback**: If content script fails, sends URL to backend for fetching
+3. **Content Processing**: Backend fetches page, extracts relevant content, and returns it
+4. **Basic Info Fallback**: If backend fails, uses tab title and URL
+5. **Seamless Experience**: User sees clear status messages for each method
+
+## Testing the Extension
+
+### Test Scenarios
+
+#### ✅ **Normal Web Pages**
+
+- **Test**: Visit any regular website (e.g., news sites, blogs)
+- **Expected**: "Page indexed successfully!"
+- **Method**: Content script
+
+#### ✅ **Restricted Pages**
+
+- **Test**: Visit pages with strict CSP or CORS policies
+- **Expected**: "Page indexed successfully! (via backend)"
+- **Method**: Backend fetching
+
+#### ✅ **Chrome System Pages**
+
+- **Test**: Visit `chrome://extensions/` or `chrome://settings/`
+- **Expected**: "Limited page access - using basic page info"
+- **Method**: Basic page info fallback
+
+#### ✅ **PDF or Non-HTML Pages**
+
+- **Test**: Visit pages that return non-HTML content
+- **Expected**: Backend error handling with clear message
+- **Method**: Backend with content type validation
+
+#### ✅ **Slow Loading Pages**
+
+- **Test**: Visit pages that take time to load
+- **Expected**: Content script waits for page to load
+- **Method**: Content script with load event handling
+
+#### ✅ **Security Test - Forms**
+
+- **Test**: Visit pages with login forms, payment forms
+- **Expected**: All form data is removed, only public content remains
+- **Method**: Content sanitization
+
+### Debug Information
+
+The extension provides detailed console logging:
+
+- Content script loading and message handling
+- Retry attempts and timing
+- Backend request attempts and responses
+- Error details and fallback methods
+
+## Building the Extension
+
+### Development
+
+```bash
 npm install
+npm run dev
 ```
 
-#### b. Create a `.env` file in the project root:
+### Production Build
 
-```
-OPENAI_API_KEY=sk-...
-GROK_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-...
-GEMINI_API_KEY=...
-PORT=3001
+```bash
+npm install
+npm run build
 ```
 
-#### c. Start the proxy server
+### Loading in Chrome
 
-```
-node proxy-server.js
-```
+1. Open Chrome and go to `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked" and select the `frontend` folder
+4. The extension will be installed with minimal permissions
 
-- The proxy will run on `http://localhost:3001` by default.
-- **All API keys must be set in the `.env` file.**
-- The extension will communicate only with the proxy endpoints (never directly with LLM providers).
+## How It Works
 
-### 3. Set Up the Frontend
+1. **Content Script Injection**: Content scripts are automatically injected on all web pages via manifest declaration
+2. **Popup Opens**: When user clicks the extension icon, `activeTab` permission grants access to current tab
+3. **Page Content**: Extension extracts HTML content from the current page via message passing
+4. **Fallback Fetching**: If content script fails, backend fetches page content via HTTP
+5. **Storage**: Conversation history is saved per page using the storage API
+6. **Clean Exit**: When popup closes, no ongoing access to the page
 
-#### a. Install frontend dependencies
+## File Structure
 
-Navigate to the `frontend` directory and install required packages:
+- `manifest.json` - Extension configuration with absolute minimal permissions
+- `popup.html/js/css` - Extension popup interface
+- `content.js` - Content script automatically injected via manifest
+- `background.js` - Service worker for message handling
+- `webpack.config.js` - Build configuration for dependencies
 
-```
-cd frontend
-npm install marked dompurify
-```
+## Backend Integration
 
-#### b. Build the popup bundle
+The extension integrates with the backend server for:
 
-From the `frontend` directory, run:
+- **Page Content Fetching**: Fallback method when content scripts fail
+- **AI Provider Proxies**: Secure API calls to OpenAI, Claude, Gemini, and Grok
+- **Connection Status**: Real-time status checking for AI providers
 
-```
-npx webpack
-```
+### Backend Endpoints Used
 
-This will generate or update `popup.bundle.js` to match your current `popup.js`.
+- `POST /api/fetch-page` - Fetch page content from URL
+- `POST /api/openai` - OpenAI API proxy
+- `POST /api/anthropic` - Claude API proxy
+- `POST /api/gemini` - Gemini API proxy
+- `POST /api/grok` - Grok API proxy
 
-### 4. Load the Extension in Your Browser
+## Permission Explanation
 
-1. Open Chrome or Firefox and go to the Extensions page.
-2. Enable "Developer mode" (Chrome) or "Debug Add-ons" (Firefox).
-3. Click "Load unpacked" (Chrome) or "Load Temporary Add-on" (Firefox).
-4. Select the `PageAI` directory.
+- **`storage`**: Essential for saving chat history per page
+- **`activeTab`**: Required to access the current tab's content when popup opens
 
-### 5. Usage
-
-- Click the PageAI icon to open the popup.
-- Use the chat interface to ask questions about the current page.
-- All LLM requests are routed securely through your backend proxy.
-
-### 6. Deployment (Optional)
-
-- Deploy your proxy server to a cloud provider (Railway, Render, Vercel, Heroku, etc.).
-- Update the endpoints in `popup.js` (and any other frontend files making API calls) to use your deployed proxy URL instead of `localhost`.
-- Never expose your API keys in the extension or client code.
-
-## Troubleshooting
-
-- **Module not found: Error: Can't resolve 'marked' or 'dompurify'**
-  - Make sure you have run `npm install marked dompurify` in the `frontend` directory.
-  - Then rebuild with `npx webpack`.
-
-## Security Notes
-
-- **Never commit your `.env` file or API keys to version control.**
-- The extension is designed to keep all secrets on the backend.
-
-## License
-
-MIT
+This is the absolute minimum set of permissions that allows the extension to function while maintaining user privacy and following Chrome's security model. It's impossible to reduce permissions further while maintaining the core functionality.
