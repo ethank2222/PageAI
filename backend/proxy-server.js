@@ -149,7 +149,25 @@ app.post("/api/fetch-page", async (req, res) => {
       // Remove all aria-* attributes
       .replace(/\saria-[^=]*="[^"]*"/gi, "")
       // Remove all comments
-      .replace(/<!--[\s\S]*?-->/g, "");
+      .replace(/<!--[\s\S]*?-->/g, "")
+      // Remove all navigation elements
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
+      // Remove all footer elements
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
+      // Remove all header elements
+      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "")
+      // Remove all aside elements
+      .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, "")
+      // Remove all table elements
+      .replace(/<table[^>]*>[\s\S]*?<\/table>/gi, "")
+      // Remove all video elements
+      .replace(/<video[^>]*>[\s\S]*?<\/video>/gi, "")
+      // Remove all audio elements
+      .replace(/<audio[^>]*>[\s\S]*?<\/audio>/gi, "")
+      // Remove all canvas elements
+      .replace(/<canvas[^>]*>[\s\S]*?<\/canvas>/gi, "")
+      // Remove all svg elements
+      .replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, "");
 
     // SECURITY: Remove sensitive patterns from text content
     sanitizedHtml = sanitizedHtml
@@ -182,44 +200,46 @@ app.post("/api/fetch-page", async (req, res) => {
       .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, "")
       .replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, "");
 
-    // Extract headings for better structure
+    // Extract only essential headings (h1, h2, h3) - limit to first 5
     const headingMatches =
-      content.match(/<h[1-6][^>]*>([^<]+)<\/h[1-6]>/gi) || [];
-    const headings = headingMatches.map((heading) => {
-      const level = heading.match(/<h([1-6])/i)[1];
+      content.match(/<h[1-3][^>]*>([^<]+)<\/h[1-3]>/gi) || [];
+    const headings = headingMatches.slice(0, 5).map((heading) => {
+      const level = heading.match(/<h([1-3])/i)[1];
       const text = heading
-        .replace(/<h[1-6][^>]*>([^<]+)<\/h[1-6]>/i, "$1")
+        .replace(/<h[1-3][^>]*>([^<]+)<\/h[1-3]>/i, "$1")
         .trim();
       return { level: parseInt(level), text };
     });
 
-    // Extract lists for better structure
+    // Extract only essential lists - limit to first 3 lists, max 5 items each
     const listMatches = content.match(/<[uo]l[^>]*>[\s\S]*?<\/[uo]l>/gi) || [];
-    const lists = listMatches.map((list) => {
+    const lists = listMatches.slice(0, 3).map((list) => {
       const items = list.match(/<li[^>]*>([^<]+)<\/li>/gi) || [];
-      return items.map((item) =>
-        item.replace(/<li[^>]*>([^<]+)<\/li>/i, "$1").trim()
-      );
+      return items
+        .slice(0, 5)
+        .map((item) => item.replace(/<li[^>]*>([^<]+)<\/li>/i, "$1").trim());
     });
 
-    // Extract alt attributes
+    // Extract only essential alt attributes - limit to first 5
     const altMatches = content.match(/alt="([^"]*)"/gi) || [];
     const alts = altMatches
+      .slice(0, 5)
       .map((alt) => alt.replace(/alt="([^"]*)"/i, "$1"))
       .filter(Boolean);
 
-    // Extract visible text content
+    // Extract visible text content - limit to first 500 characters
     const textContent = content
       .replace(/<[^>]+>/g, " ") // Remove HTML tags
       .replace(/\s+/g, " ") // Normalize whitespace
-      .trim();
+      .trim()
+      .substring(0, 500); // Limit to 500 characters
 
-    // Combine all content with better structure
+    // Combine all content with minimal structure
     let result = "";
-    if (title) result += `# Page Title\n${title}\n\n`;
+    if (title) result += `# ${title}\n\n`;
 
     if (headings.length > 0) {
-      result += `## Page Structure\n`;
+      result += `## Key Headings\n`;
       headings.forEach((heading) => {
         const prefix = "#".repeat(heading.level);
         result += `${prefix} ${heading.text}\n`;
@@ -228,21 +248,27 @@ app.post("/api/fetch-page", async (req, res) => {
     }
 
     if (lists.length > 0) {
-      result += `## Lists Found\n`;
+      result += `## Key Lists\n`;
       lists.forEach((list, index) => {
-        result += `### List ${index + 1}\n`;
-        list.forEach((item) => {
-          result += `- ${item}\n`;
-        });
-        result += "\n";
+        if (list.length > 0) {
+          result += `- ${list.slice(0, 3).join(", ")}\n`;
+        }
       });
+      result += "\n";
     }
 
     if (alts.length) {
-      result += `## Image Alt Text\n${alts.join(" | ")}\n\n`;
+      result += `## Images: ${alts.slice(0, 3).join(", ")}\n\n`;
     }
 
-    result += `## Main Content\n${textContent}`;
+    if (textContent) {
+      result += `## Content\n${textContent}`;
+    }
+
+    // Final size check - if still too large, truncate further
+    if (result.length > 1000) {
+      result = result.substring(0, 1000) + "...";
+    }
 
     res.json({
       html: result,

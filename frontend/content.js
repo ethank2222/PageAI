@@ -72,20 +72,6 @@ if (
         'meta[name*="private"]',
         'meta[name*="personal"]',
         'meta[name*="confidential"]',
-        "[data-password]",
-        "[data-email]",
-        "[data-phone]",
-        "[data-credit]",
-        "[data-card]",
-        "[data-ssn]",
-        "[data-social]",
-        "[data-account]",
-        "[data-user]",
-        "[data-login]",
-        "[data-secret]",
-        "[data-private]",
-        "[data-personal]",
-        "[data-confidential]",
         '[class*="password"]',
         '[class*="email"]',
         '[class*="phone"]',
@@ -126,7 +112,7 @@ if (
       const allInputs = docClone.querySelectorAll("input, textarea, select");
       allInputs.forEach((input) => {
         // Remove sensitive attributes
-        const sensitiveAttrs = ["value", "placeholder", "data-*", "aria-*"];
+        const sensitiveAttrs = ["value", "placeholder"];
         sensitiveAttrs.forEach((attr) => {
           if (input.hasAttribute(attr)) {
             input.removeAttribute(attr);

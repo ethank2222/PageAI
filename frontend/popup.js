@@ -434,7 +434,7 @@ document.addEventListener("DOMContentLoaded", function () {
   getPageHtml();
 
   // Handle sending a message
-  // Extract only content, title, and alt tags from HTML with security measures
+  // Extract only essential content with aggressive filtering to prevent API overload
   function extractRelevantContent(html) {
     // Create a DOM parser
     const parser = new DOMParser();
@@ -459,9 +459,78 @@ document.addEventListener("DOMContentLoaded", function () {
       "object",
       "embed",
       "applet",
-      "[data-*]",
-      "[aria-*]",
-      '[class*="password"]',
+      "nav",
+      "footer",
+      "aside",
+      "header",
+      "menu",
+      "menuitem",
+      "dialog",
+      "details",
+      "summary",
+      "figure",
+      "figcaption",
+      "picture",
+      "source",
+      "track",
+      "video",
+      "audio",
+      "canvas",
+      "svg",
+      "math",
+      "table",
+      "thead",
+      "tbody",
+      "tfoot",
+      "tr",
+      "td",
+      "th",
+      "colgroup",
+      "col",
+      "caption",
+      "fieldset",
+      "legend",
+      "optgroup",
+      "option",
+      "datalist",
+      "output",
+      "progress",
+      "meter",
+      "time",
+      "mark",
+      "ruby",
+      "rt",
+      "rp",
+      "bdi",
+      "bdo",
+      "wbr",
+      "template",
+      "slot",
+      "shadow",
+      "content",
+      "element",
+      "decorator",
+      "import",
+      "spacer",
+      "marquee",
+      "blink",
+      "isindex",
+      "listing",
+      "plaintext",
+      "xmp",
+      "nextid",
+      "basefont",
+      "center",
+      "dir",
+      "font",
+      "hgroup",
+      "multicol",
+      "nobr",
+      "noembed",
+      "noframes",
+      "strike",
+      "tt",
+      'class*="password"]',
       '[class*="email"]',
       '[class*="phone"]',
       '[class*="credit"]',
@@ -539,27 +608,30 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 
-    // Extract headings for better structure
-    const headings = Array.from(
-      doc.querySelectorAll("h1, h2, h3, h4, h5, h6")
-    ).map((heading) => {
-      const level = parseInt(heading.tagName.charAt(1));
-      return { level, text: heading.innerText.trim() };
-    });
+    // Extract only essential headings (h1, h2, h3) - limit to first 5
+    const headings = Array.from(doc.querySelectorAll("h1, h2, h3"))
+      .slice(0, 5)
+      .map((heading) => {
+        const level = parseInt(heading.tagName.charAt(1));
+        return { level, text: heading.innerText.trim() };
+      });
 
-    // Extract lists for better structure
-    const lists = Array.from(doc.querySelectorAll("ul, ol")).map((list) => {
-      return Array.from(list.querySelectorAll("li")).map((item) =>
-        item.innerText.trim()
-      );
-    });
+    // Extract only essential lists - limit to first 3 lists, max 5 items each
+    const lists = Array.from(doc.querySelectorAll("ul, ol"))
+      .slice(0, 3)
+      .map((list) => {
+        return Array.from(list.querySelectorAll("li"))
+          .slice(0, 5)
+          .map((item) => item.innerText.trim());
+      });
 
-    // Get all alt attributes (safe to keep)
+    // Get only essential alt attributes - limit to first 5
     let alts = Array.from(doc.querySelectorAll("[alt]"))
+      .slice(0, 5)
       .map((el) => el.getAttribute("alt"))
       .filter(Boolean);
 
-    // Get visible text content (excluding hidden elements)
+    // Get visible text content (excluding hidden elements) - limit to first 1000 characters
     function getVisibleText(node) {
       if (node.nodeType === Node.TEXT_NODE) {
         return node.textContent;
@@ -591,12 +663,19 @@ document.addEventListener("DOMContentLoaded", function () {
       .replace(/\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b/g, "[IBAN]") // Remove IBANs
       .replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, "[IP_ADDRESS]"); // Remove IP addresses
 
-    // Combine all with better structure
+    // DRAMATICALLY REDUCE CONTENT SIZE
+    // Limit body text to first 500 characters
+    bodyText = bodyText.trim().substring(0, 500);
+
+    // Remove excessive whitespace
+    bodyText = bodyText.replace(/\s+/g, " ").trim();
+
+    // Combine all with minimal structure
     let result = "";
-    if (title) result += `# Page Title\n${title}\n\n`;
+    if (title) result += `# ${title}\n\n`;
 
     if (headings.length > 0) {
-      result += `## Page Structure\n`;
+      result += `## Key Headings\n`;
       headings.forEach((heading) => {
         const prefix = "#".repeat(heading.level);
         result += `${prefix} ${heading.text}\n`;
@@ -605,21 +684,28 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     if (lists.length > 0) {
-      result += `## Lists Found\n`;
+      result += `## Key Lists\n`;
       lists.forEach((list, index) => {
-        result += `### List ${index + 1}\n`;
-        list.forEach((item) => {
-          result += `- ${item}\n`;
-        });
-        result += "\n";
+        if (list.length > 0) {
+          result += `- ${list.slice(0, 3).join(", ")}\n`;
+        }
       });
+      result += "\n";
     }
 
     if (alts.length) {
-      result += `## Image Alt Text\n${alts.join(" | ")}\n\n`;
+      result += `## Images: ${alts.slice(0, 3).join(", ")}\n\n`;
     }
 
-    result += `## Main Content\n${bodyText.trim()}`;
+    if (bodyText) {
+      result += `## Content\n${bodyText}`;
+    }
+
+    // Final size check - if still too large, truncate further
+    if (result.length > 1000) {
+      result = result.substring(0, 1000) + "...";
+    }
+
     return result;
   }
 
@@ -726,25 +812,42 @@ document.addEventListener("DOMContentLoaded", function () {
     let body = {};
     let model = "";
 
+    // Get conversation history
+    const filtered = conversation.filter(
+      (m) => m.role === "user" || m.role === "bot"
+    );
+    const maxHistory = 10;
+    const trimmed = filtered.slice(-maxHistory);
+
+    // Check if this is the first message in the conversation
+    const isFirstMessage = trimmed.length === 0;
+
+    // Only include page context if this is the first message
+    const pageContext = isFirstMessage ? html + crossPageContent : "";
+
     if (provider.includes("openai")) {
       endpoint = "https://pageai-production.up.railway.app/api/openai";
       headers = { "Content-Type": "application/json" };
       model = "gpt-3.5-turbo";
-      const systemPrompt = buildSystemPrompt(html + crossPageContent);
-      const filtered = conversation.filter(
-        (m) => m.role === "user" || m.role === "bot"
-      );
-      const mapped = filtered.map((m) => ({
+
+      const messages = [];
+
+      if (isFirstMessage) {
+        // Include page context only for first message
+        const systemPrompt = buildSystemPrompt(pageContext);
+        messages.push({ role: "system", content: systemPrompt });
+      }
+
+      // Add conversation history
+      const mapped = trimmed.map((m) => ({
         role: m.role === "bot" ? "assistant" : m.role,
         content: m.content,
       }));
-      const maxHistory = 10;
-      const trimmed = mapped.slice(-maxHistory);
-      const messages = [
-        { role: "system", content: systemPrompt },
-        ...trimmed,
-        { role: "user", content: question },
-      ];
+      messages.push(...mapped);
+
+      // Add current question
+      messages.push({ role: "user", content: question });
+
       body = {
         model,
         messages,
@@ -755,21 +858,25 @@ document.addEventListener("DOMContentLoaded", function () {
       endpoint = "https://pageai-production.up.railway.app/api/grok";
       headers = { "Content-Type": "application/json" };
       model = "grok-1";
-      const systemPrompt = buildSystemPrompt(html + crossPageContent);
-      const filtered = conversation.filter(
-        (m) => m.role === "user" || m.role === "bot"
-      );
-      const mapped = filtered.map((m) => ({
+
+      const messages = [];
+
+      if (isFirstMessage) {
+        // Include page context only for first message
+        const systemPrompt = buildSystemPrompt(pageContext);
+        messages.push({ role: "system", content: systemPrompt });
+      }
+
+      // Add conversation history
+      const mapped = trimmed.map((m) => ({
         role: m.role === "bot" ? "assistant" : m.role,
         content: m.content,
       }));
-      const maxHistory = 10;
-      const trimmed = mapped.slice(-maxHistory);
-      const messages = [
-        { role: "system", content: systemPrompt },
-        ...trimmed,
-        { role: "user", content: question },
-      ];
+      messages.push(...mapped);
+
+      // Add current question
+      messages.push({ role: "user", content: question });
+
       body = {
         model,
         messages,
@@ -779,21 +886,29 @@ document.addEventListener("DOMContentLoaded", function () {
     } else if (provider.includes("gemini")) {
       endpoint = "https://pageai-production.up.railway.app/api/gemini";
       headers = { "Content-Type": "application/json" };
-      const context = buildSystemPrompt(html + crossPageContent);
-      const filtered = conversation.filter(
-        (m) => m.role === "user" || m.role === "bot"
-      );
-      const history = filtered.map((m) => ({
+
+      const history = trimmed.map((m) => ({
         role: m.role === "bot" ? "model" : "user",
         parts: [{ text: m.content }],
       }));
-      const contents = [
-        ...history,
-        {
+
+      const contents = [...history];
+
+      if (isFirstMessage) {
+        // Include page context only for first message
+        const context = buildSystemPrompt(pageContext);
+        contents.push({
           role: "user",
           parts: [{ text: context + "\n\n" + question }],
-        },
-      ];
+        });
+      } else {
+        // Just add the question without context
+        contents.push({
+          role: "user",
+          parts: [{ text: question }],
+        });
+      }
+
       body = {
         contents,
         generationConfig: {
@@ -804,19 +919,25 @@ document.addEventListener("DOMContentLoaded", function () {
     } else if (provider.includes("claude")) {
       endpoint = "https://pageai-production.up.railway.app/api/anthropic";
       headers = { "Content-Type": "application/json" };
-      const context = buildSystemPrompt(html + crossPageContent);
-      const filtered = conversation.filter(
-        (m) => m.role === "user" || m.role === "bot"
-      );
-      const history = filtered.map((m) => ({
+
+      const messages = [];
+
+      if (isFirstMessage) {
+        // Include page context only for first message
+        const context = buildSystemPrompt(pageContext);
+        messages.push({ role: "user", content: context });
+      }
+
+      // Add conversation history
+      const history = trimmed.map((m) => ({
         role: m.role === "bot" ? "assistant" : "user",
         content: m.content,
       }));
-      const messages = [
-        { role: "user", content: context },
-        ...history,
-        { role: "user", content: question },
-      ];
+      messages.push(...history);
+
+      // Add current question
+      messages.push({ role: "user", content: question });
+
       body = {
         model: "claude-3-opus-20240229",
         max_tokens: 512,
@@ -832,7 +953,7 @@ document.addEventListener("DOMContentLoaded", function () {
       };
       body = {
         prompt: question,
-        context: html + crossPageContent,
+        context: isFirstMessage ? pageContext : "",
         // Add other fields as required by your provider
       };
     }
